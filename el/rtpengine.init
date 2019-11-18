@@ -7,7 +7,7 @@
 #
 # processname: rtpengine
 # config: /etc/sysconfig/rtpengine
-# pidfile: /var/run/rtpengine.pid
+# pidfile: /run/rtpengine.pid
 #
 ### BEGIN INIT INFO
 # Provides: rtpengine
@@ -32,9 +32,9 @@ fi
 
 rtpengine=/usr/sbin/rtpengine
 prog=rtpengine
-pidfile=${PIDFILE-/var/run/rtpengine.pid}
-lockfile=${LOCKFILE-/var/lock/subsys/rtpengine}
-configfile=${CONFIG_FILE-/etc/rtpengine/rtpengine.conf}
+pidfile=${PIDFILE:-/run/rtpengine.pid}
+lockfile=${LOCKFILE:-/var/lock/subsys/rtpengine}
+configfile=${CONFIG_FILE:-/etc/rtpengine/rtpengine.conf}
 cachefile=/var/lib/ngcp-rtpengine/rtpengine.cfg
 PIDFILE=${pidfile}
 RETVAL=0
@@ -195,6 +195,10 @@ EOF
 		# shellcheck disable=SC2086
 		daemon --pidfile="${pidfile}" "$rtpengine" $OPTS
 	fi
+
+	pidof=$(pidof $rtpengine)
+	echo ${pidof} >${pidfile}
+
         RETVAL=$?
         echo
         [ $RETVAL = 0 ] && touch "${lockfile}"
@@ -206,10 +210,16 @@ stop() {
 	killproc -p "${pidfile}" "$rtpengine"
 	RETVAL=$?
 	echo
-	if [ -f "$cachefile" ];then
-		. "$cachefile"
-		echo "Unloading module for in-kernel packet forwarding"
-		echo "del $TABLE" > /proc/rtpengine/control
+	[ -f "$cachefile" ] && source "$cachefile"
+
+	if [ ! -z "$(lsmod |grep -o xt_RTPENGINE)" ];then
+
+		pidof="$(pidof rtpengine)"
+		if [ ! -z "${pidof}" && -f "${pidfile}" ];then
+			kill -9 ${pidof}
+			rm -f ${pidfile}
+		fi
+
 		firewall-cmd --state 2>/dev/null
 		if [[ $? == 0 ]];then
 			firewall-cmd --direct --remove-rules ipv4 filter rtpengine
@@ -219,14 +229,20 @@ stop() {
 			firewall-cmd --reload
 		else
 			for fw in iptables ip6tables;do
-				$fw -D rtpengine -p udp -j RTPENGINE --id "$CUR_TABLE"
-				$fw -t filter -D INPUT -j rtpengine
+				$fw -D INPUT -j rtpengine 2>/dev/null
+				$fw -t filter -D INPUT -j rtpengine 2>/dev/null
+				$fw -F rtpengine
 				$fw -X rtpengine
 			done
 		fi
+
+                echo "Unloading module for in-kernel packet forwarding"
+                echo "del $TABLE" > /proc/rtpengine/control
+
 		rmmod xt_RTPENGINE
-		rm -f "$cachefile"
 	fi
+
+        [ -f "$cachefile" ] && rm -f "$cachefile"
  
 	[ $RETVAL = 0 ] && rm -f "${lockfile}" "${pidfile}"
 }

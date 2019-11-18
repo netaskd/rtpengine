@@ -121,6 +121,8 @@ install -D -p -m755 recording-daemon/%{binname}-recording %{buildroot}%{_sbindir
 %if 0%{?has_systemd_dirs}
 install -D -p -m755 el/%{binname}.service \
 	%{buildroot}%{_unitdir}/%{binname}.service
+install -D -p -m755 el/%{binname}.init \
+	%{buildroot}%{_sbindir}/%{binname}-init
 %else
 install -D -p -m755 el/%{binname}.init \
 	%{buildroot}%{_initrddir}/%{name}
@@ -233,6 +235,7 @@ true
 %{_sbindir}/%{binname}-ctl
 # init.d script and configuration file
 %if 0%{?has_systemd_dirs}
+%{_sbindir}/%{binname}-init
 %{_unitdir}/%{binname}.service
 %else
 %{_initrddir}/%{name}
@@ -275,6 +278,8 @@ true
 %endif
 
 %changelog
+* Mon Nov 18 2019 netaskd <netaskd@gmail.com> - 8.0.1.1-1
+  - add alias for rtpengine.init to /usr/sbin/rtpengine-init for systemd based systems
 * Tue Jul 10 2018 netaskd <netaskd@gmail.com> - 6.4.0.0-1
   - update to ngcp-rtpengine version 6.4.0.0
   - add packet recording
